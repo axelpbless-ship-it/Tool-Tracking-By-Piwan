@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool-Tracking-By-Piwan</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Configuración global */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* bg-gray-100 */
+        }
+        /* Ocultar las vistas por defecto, serán mostradas por JS */
+        .app-view { display: none; }
+        
+        /* Estilos para el estado activo de la navegación */
+        .nav-item.active {
+            border-bottom: 3px solid #6AA84F; /* Verde brillante */
+            color: #1f2937; /* Gray-800 */
+            font-weight: 600;
+        }
+        /* Estilos de tabla personalizados para mejor lectura */
+        .inventory-table th {
+            text-transform: uppercase;
+            font-size: 0.75rem; /* text-xs */
+            letter-spacing: 0.05em; /* tracking-wider */
+            padding: 0.75rem 1.5rem;
+            color: white;
+        }
+        .inventory-table td {
+            padding: 1rem 1.5rem;
+            font-size: 0.95rem;
+        }
+        .inventory-table tr:nth-child(even) {
+            background-color: #f9fafb; /* gray-50 */
+        }
+        /* Scrollbar styling for better look */
+        .inventory-list-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .inventory-list-container::-webkit-scrollbar-thumb {
+            background-color: #9ca3af; /* gray-400 */
+            border-radius: 4px;
+        }
+        .inventory-list-container::-webkit-scrollbar-track {
+            background-color: #e5e7eb; /* gray-200 */
+        }
+    </style>
+</head>
+<body class="min-h-screen antialiased">
+    
+    <!-- Contenedor del Toast de Mensajes -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2">
+        <!-- Los toasts se insertarán aquí por JavaScript -->
+    </div>
+
+    <!-- Contenedor del Modal de Confirmación -->
+    <div id="modal-container" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <!-- El modal se insertará aquí por JavaScript -->
+    </div>
+
+    <!-- PRELOADER/LOGIN VIEW -->
+    <div id="login-view" class="flex items-center justify-center min-h-screen bg-gray-100">
+        <div class="w-full max-w-sm bg-white p-8 rounded-xl shadow-2xl transition-all duration-300 transform scale-100">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">Iniciar Sesión</h2>
+            <form id="login-form">
+                <div class="mb-4">
+                    <label for="username" class="block text-sm font-medium text-gray-700">Usuario</label>
+                    <input type="text" id="username" name="username" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-[#4d9735] focus:border-[#4d9735] transition duration-150" value="admin" required>
+                </div>
+                <div class="mb-6">
+                    <label for="password" class="block text-sm font-medium text-gray-700">Contraseña</label>
+                    <input type="password" id="password" name="password" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-[#4d9735] focus:border-[#4d9735] transition duration-150" value="admin" required>
+                </div>
+                <!-- COLOR AJUSTADO: Botón Entrar -->
+                <button type="submit" class="w-full py-2 px-4 border border-transparent rounded-lg shadow-md text-white font-semibold bg-[#4d9735] hover:bg-[#38761D] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6AA84F] transition duration-300 ease-in-out transform hover:scale-[1.01]">
+                    Entrar
+                </button>
+            </form>
+            <p id="login-message" class="text-center text-sm mt-4 text-red-500 hidden">
+                No se pudo verificar el usuario.
+            </p>
+            <p class="text-xs text-gray-400 text-center mt-6 p-2 bg-gray-50 rounded-lg">
+                Roles de prueba: **admin**, **almacenista**, **operario**
+            </p>
+        </div>
+    </div>
+    
+    <!-- MAIN APPLICATION VIEW -->
+    <div id="main-app-view" class="hidden min-h-screen flex flex-col">
+        <!-- HEADER (NAVBAR) - COLOR AJUSTADO: Verde Oscuro -->
+        <header class="bg-[#38761D] shadow-lg text-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <i data-lucide="building" class="w-6 h-6"></i>
+                    <h1 class="text-xl font-bold tracking-tight">Gestión de Activos Fijos</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="user-info-display" class="text-sm font-medium text-green-100 hidden sm:block">Usuario: Desconocido</span>
+                    <!-- COLOR AJUSTADO: Botón Cerrar Sesión -->
+                    <button id="logout-btn" class="py-1 px-3 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition duration-150 transform hover:scale-105">
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- SUB-NAV (VISTAS) -->
+        <nav class="bg-white shadow-md border-b border-gray-200 sticky top-0 z-10">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex space-x-1 justify-center sm:justify-start">
+                    <!-- Los botones de navegación usarán el color activo de la CSS ajustada -->
+                    <button id="nav-general" data-view="inventory-general-view" class="nav-item active flex items-center px-3 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition duration-150 text-sm font-medium rounded-t-lg">
+                        <i data-lucide="layout-grid" class="w-4 h-4 mr-2"></i>Inventario General
+                    </button>
+                    <button id="nav-altas" data-view="altas-view" class="nav-item flex items-center px-3 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition duration-150 text-sm font-medium rounded-t-lg">
+                        <i data-lucide="plus-circle" class="w-4 h-4 mr-2"></i>Altas
+                    </button>
+                    <button id="nav-edicion" data-view="edicion-bajas-view" class="nav-item flex items-center px-3 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition duration-150 text-sm font-medium rounded-t-lg">
+                        <i data-lucide="pencil-line" class="w-4 h-4 mr-2"></i>Edición / Bajas
+                    </button>
+                    <button id="nav-asignacion" data-view="asignacion-view" class="nav-item flex items-center px-3 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition duration-150 text-sm font-medium rounded-t-lg">
+                        <i data-lucide="send" class="w-4 h-4 mr-2"></i>Asignación de Equipo
+                    </button>
+                    <button id="nav-devolucion" data-view="devolucion-view" class="nav-item flex items-center px-3 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition duration-150 text-sm font-medium rounded-t-lg">
+                        <i data-lucide="log-in" class="w-4 h-4 mr-2"></i>Devolución (Check In)
+                    </button>
+                    <button id="nav-operarios" data-view="operarios-view" class="nav-item flex items-center px-3 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition duration-150 text-sm font-medium rounded-t-lg">
+                        <i data-lucide="users" class="w-4 h-4 mr-2"></i>Registro de Operarios
+                    </button>
+                    <button id="nav-bitacora" data-view="bitacora-view" class="nav-item flex items-center px-3 py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition duration-150 text-sm font-medium rounded-t-lg">
+                        <i data-lucide="book-open-text" class="w-4 h-4 mr-2"></i>Bitácora
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-grow p-4 sm:p-8">
+            <div class="max-w-7xl mx-auto">
+                <!-- INVENTORY GENERAL VIEW -->
+                <div id="inventory-general-view" class="app-view">
+                    <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Inventario General</h2>
+                    
+                    <div class="mb-4 flex justify-between items-center">
+                        <h3 class="text-xl font-semibold text-gray-700">Equipo Disponible</h3>
+                        <div class="relative w-full max-w-sm">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                            <input type="text" id="inventory-search" placeholder="Buscar por Nombre, ID, o Categoría" class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full shadow-sm focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                        </div>
+                    </div>
+
+                    <div class="bg-white shadow-xl rounded-xl overflow-hidden">
+                        <div class="overflow-x-auto inventory-list-container">
+                            <!-- COLOR AJUSTADO: Encabezado de tabla -->
+                            <table class="min-w-full divide-y divide-green-200 inventory-table">
+                                <thead class="bg-[#4d9735]">
+                                    <tr>
+                                        <th class="rounded-tl-xl text-left">ID</th>
+                                        <th class="text-left">Nombre</th>
+                                        <th class="text-left">Stock / Capacidad</th>
+                                        <th class="text-left">Estado</th>
+                                        <th class="rounded-tr-xl text-left">Asignado a</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventory-list-body" class="bg-white divide-y divide-gray-200">
+                                    <!-- Los datos del inventario se inyectarán aquí por JS -->
+                                    <tr>
+                                        <td colspan="5" class="text-center py-8 text-gray-500">Cargando datos del inventario...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ALTAS VIEW -->
+                <div id="altas-view" class="app-view">
+                    <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Altas de Inventario (Nuevo Equipo)</h2>
+                    <div class="bg-white shadow-xl rounded-xl p-6 sm:p-8 max-w-2xl mx-auto">
+                        <form id="add-item-form" class="space-y-6">
+                            <div>
+                                <label for="new-item-name" class="block text-sm font-medium text-gray-700">Nombre del Equipo</label>
+                                <input type="text" id="new-item-name" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                            </div>
+                            <!-- ELIMINADA: Casilla de Precio Unitario -->
+                            <div class="grid grid-cols-1 gap-6">
+                                <div>
+                                    <label for="new-item-quantity" class="block text-sm font-medium text-gray-700">Cantidad Total (Capacidad)</label>
+                                    <input type="number" id="new-item-quantity" required min="1" value="1" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="new-item-category" class="block text-sm font-medium text-gray-700">Categoría</label>
+                                <select id="new-item-category" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                    <option value="Herramientas">Herramientas</option>
+                                    <option value="Maquinaria">Maquinaria</option>
+                                    <option value="EquipoSeguridad">Equipo de Seguridad</option>
+                                    <option value="Otros">Otros</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="new-item-description" class="block text-sm font-medium text-gray-700">Descripción / Notas</label>
+                                <textarea id="new-item-description" rows="3" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]"></textarea>
+                            </div>
+                            <!-- COLOR AJUSTADO: Botón de acción principal -->
+                            <button type="submit" class="w-full py-3 px-4 border border-transparent rounded-lg shadow-md text-white font-semibold bg-[#6AA84F] hover:bg-[#4d9735] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6AA84F] transition duration-300">
+                                Registrar Nuevo Equipo
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- EDICION / BAJAS VIEW -->
+                <div id="edicion-bajas-view" class="app-view">
+                    <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Edición y Bajas de Inventario</h2>
+                    
+                    <div class="bg-white shadow-xl rounded-xl p-6 sm:p-8 max-w-4xl mx-auto mb-8">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Buscar Equipo por ID o Nombre</h3>
+                        <div class="relative">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                            <input type="text" id="edit-search" placeholder="Ingrese ID o Nombre del equipo (Ej: H001, Martillo)" class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                        </div>
+                        <p id="edit-search-info" class="text-sm text-gray-500 mt-3 text-center">Seleccione un equipo para editar o dar de baja.</p>
+                        
+                        <div id="edit-search-results" class="mt-4 max-h-60 overflow-y-auto space-y-2">
+                            <!-- Resultados de búsqueda se insertarán aquí -->
+                            <div class="text-center py-4 text-gray-400">Ingrese un término para buscar.</div>
+                        </div>
+                    </div>
+
+                    <div id="edit-item-form-container" class="bg-white shadow-xl rounded-xl p-6 sm:p-8 max-w-2xl mx-auto hidden">
+                        <h3 class="text-2xl font-bold text-gray-800 mb-6">Editar Artículo: <span id="editing-item-name" class="text-[#6AA84F]"></span></h3>
+                        <form id="edit-item-form" class="space-y-6">
+                            <input type="hidden" id="edit-item-id">
+                            
+                            <div>
+                                <label for="edit-item-name" class="block text-sm font-medium text-gray-700">Nombre del Equipo</label>
+                                <input type="text" id="edit-item-name" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                            </div>
+                            <!-- ELIMINADA: Casilla de Precio Unitario -->
+                            <div class="grid grid-cols-1 gap-6">
+                                <div>
+                                    <label for="edit-item-quantity" class="block text-sm font-medium text-gray-700">Cantidad Total (Capacidad)</label>
+                                    <input type="number" id="edit-item-quantity" required min="1" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="edit-item-category" class="block text-sm font-medium text-gray-700">Categoría</label>
+                                <select id="edit-item-category" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                    <option value="Herramientas">Herramientas</option>
+                                    <option value="Maquinaria">Maquinaria</option>
+                                    <option value="EquipoSeguridad">Equipo de Seguridad</option>
+                                    <option value="Otros">Otros</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="edit-item-description" class="block text-sm font-medium text-gray-700">Descripción / Notas</label>
+                                <textarea id="edit-item-description" rows="3" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]"></textarea>
+                            </div>
+                            
+                            <div class="flex justify-between space-x-4 pt-4">
+                                <!-- COLOR AJUSTADO: Botón de peligro (rojo) -->
+                                <button type="button" id="delete-item-button" class="w-1/3 py-3 px-4 border border-transparent rounded-lg shadow-md text-white font-semibold bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-300">
+                                    Dar de Baja (Eliminar)
+                                </button>
+                                <!-- COLOR AJUSTADO: Botón de acción principal -->
+                                <button type="submit" class="w-2/3 py-3 px-4 border border-transparent rounded-lg shadow-md text-white font-semibold bg-[#6AA84F] hover:bg-[#4d9735] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6AA84F] transition duration-300">
+                                    Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ASIGNACION DE EQUIPO VIEW -->
+                <div id="asignacion-view" class="app-view">
+                    <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Asignación de Equipo (Préstamo)</h2>
+                    <div class="bg-white shadow-xl rounded-xl p-6 sm:p-8 max-w-4xl mx-auto">
+                        <p class="text-gray-500 mb-6">Escanea el equipo y selecciona el operario para registrar la salida.</p>
+                        <form id="assign-item-form" class="space-y-6">
+                            
+                            <!-- OPERARIO RESPONSABLE -->
+                            <div>
+                                <label for="assign-operario" class="block text-sm font-medium text-gray-700">Operario responsable</label>
+                                <select id="assign-operario" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                    <option value="">-- Seleccione un operario --</option>
+                                    <!-- Opciones de operarios se cargarán aquí por JS -->
+                                </select>
+                            </div>
+
+                            <!-- LECTOR DE CÓDIGO DE BARRAS -->
+                            <div class="pt-4 border-t border-gray-200">
+                                <label for="assign-barcode-input" class="block text-sm font-medium text-gray-700 mb-2">Escanear Código de Producto</label>
+                                <div class="flex space-x-2">
+                                    <input type="text" id="assign-barcode-input" placeholder="Escanee código o ingrese ID" class="flex-grow px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                    <button type="button" id="scan-assign-btn" class="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300 transition duration-150 text-gray-700">
+                                        <i data-lucide="barcode" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- RESUMEN DE ARTÍCULOS ESCANEADOS -->
+                            <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+                                <h4 class="text-lg font-semibold text-gray-700 mb-3 flex items-center">
+                                    <i data-lucide="list-checks" class="w-5 h-5 mr-2 text-[#4d9735]"></i>
+                                    Artículos para Préstamo (<span id="scanned-count">0</span>)
+                                </h4>
+                                <div id="scanned-items-summary" class="space-y-2 max-h-40 overflow-y-auto">
+                                    <!-- Artículos escaneados se insertarán aquí -->
+                                    <p class="text-sm text-gray-500 text-center" id="empty-scan-message">Escanee un producto para empezar.</p>
+                                </div>
+                            </div>
+                            
+                            <!-- COLOR AJUSTADO: Botón de acción principal -->
+                            <button type="submit" id="confirm-assign-btn" disabled class="w-full py-3 px-4 border border-transparent rounded-lg shadow-md text-white font-semibold bg-[#6AA84F] hover:bg-[#4d9735] disabled:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6AA84F] transition duration-300">
+                                Confirmar Asignación
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- DEVOLUCION (CHECK IN) VIEW -->
+                <div id="devolucion-view" class="app-view">
+                    <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Devolución de Equipo (Check In)</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-7xl mx-auto">
+                        
+                        <!-- Columna de Préstamos Activos -->
+                        <div class="bg-white shadow-xl rounded-xl p-6 sm:p-8">
+                            <h3 class="text-xl font-semibold text-gray-700 mb-4">Seleccione un Préstamo Activo</h3>
+                            <div id="active-loans-list" class="space-y-4 max-h-[500px] overflow-y-auto">
+                                <!-- Lista de préstamos activos se insertará aquí -->
+                                <div class="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">Cargando préstamos activos...</div>
+                            </div>
+                        </div>
+
+                        <!-- Columna de Devolución de Artículos (Oculta por defecto) -->
+                        <div id="devolucion-scan-area" class="bg-white shadow-xl rounded-xl p-6 sm:p-8 hidden">
+                            <h3 class="text-xl font-semibold text-gray-700 mb-4 flex items-center">
+                                Devolución para <span id="devolucion-operario-name" class="font-bold text-[#6AA84F] ml-2"></span>
+                            </h3>
+                            <p class="text-sm text-gray-500 mb-4">Escanee los artículos que están siendo devueltos.</p>
+
+                            <form id="devolucion-item-form" class="space-y-4">
+                                <!-- LECTOR DE CÓDIGO DE BARRAS PARA DEVOLUCIÓN -->
+                                <div class="border p-4 rounded-lg bg-yellow-50/50">
+                                    <label for="devolucion-barcode-input" class="block text-sm font-medium text-gray-700 mb-2">Escanear Código de Producto Devuelto</label>
+                                    <div class="flex space-x-2">
+                                        <input type="text" id="devolucion-barcode-input" placeholder="Escanee código o ingrese ID" class="flex-grow px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                        <button type="button" id="scan-devolucion-btn" class="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300 transition duration-150 text-gray-700">
+                                            <i data-lucide="scan" class="w-5 h-5"></i>
+                                        </button>
+                                    </div>
+                                    <p id="devolucion-scan-error" class="text-red-500 text-sm mt-2 hidden">El artículo no pertenece a este préstamo o ya fue devuelto.</p>
+                                </div>
+                                
+                                <!-- RESUMEN DE ARTÍCULOS ESCANEADOS PARA DEVOLUCIÓN -->
+                                <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+                                    <h4 class="text-lg font-semibold text-gray-700 mb-3 flex items-center">
+                                        <i data-lucide="inbox" class="w-5 h-5 mr-2 text-[#4d9735]"></i>
+                                        Artículos Devueltos (<span id="devolucion-scanned-count">0</span> / <span id="devolucion-total-count">0</span>)
+                                    </h4>
+                                    <div id="devolucion-items-summary" class="space-y-2 max-h-40 overflow-y-auto">
+                                        <p class="text-sm text-gray-500 text-center" id="empty-devolucion-message">Escanee un artículo del préstamo seleccionado.</p>
+                                    </div>
+                                </div>
+
+                                <!-- ESTADO DEL PRODUCTO (OBLIGATORIO) -->
+                                <div id="product-status-area" class="pt-4 border-t border-gray-200 hidden">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Estado General del Producto (Obligatorio)</label>
+                                    <select id="devolucion-status" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                        <option value="" disabled selected>-- Seleccione el estado --</option>
+                                        <option value="Bueno">Bueno (Sin daños visibles)</option>
+                                        <option value="Dañado">Dañado (Requiere reparación)</option>
+                                        <option value="Irreparable">Irreparable (Baja inmediata)</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- COLOR AJUSTADO: Botón de acción principal -->
+                                <button type="submit" id="confirm-devolucion-btn" disabled class="w-full py-3 px-4 border border-transparent rounded-lg shadow-md text-white font-semibold bg-[#6AA84F] hover:bg-[#4d9735] disabled:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6AA84F] transition duration-300">
+                                    Confirmar Devolución y Actualizar Estado
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REGISTRO DE OPERARIOS VIEW -->
+                <div id="operarios-view" class="app-view">
+                    <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Registro de Operarios</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto">
+                        <div class="md:col-span-1 bg-white shadow-xl rounded-xl p-6 sm:p-8">
+                            <h3 class="text-xl font-semibold text-gray-700 mb-4">Añadir Nuevo Operario</h3>
+                            <form id="add-operario-form" class="space-y-4">
+                                <div>
+                                    <label for="new-operario-name" class="block text-sm font-medium text-gray-700">Nombre Completo</label>
+                                    <input type="text" id="new-operario-name" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                </div>
+                                <div>
+                                    <label for="new-operario-id" class="block text-sm font-medium text-gray-700">ID / Número de Empleado</label>
+                                    <input type="text" id="new-operario-id" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                </div>
+                                <div>
+                                    <label for="new-operario-area" class="block text-sm font-medium text-gray-700">Área / Departamento</label>
+                                    <input type="text" id="new-operario-area" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#6AA84F] focus:border-[#6AA84F]">
+                                </div>
+                                <!-- COLOR AJUSTADO: Botón de acción principal -->
+                                <button type="submit" class="w-full py-2 px-4 border border-transparent rounded-lg shadow-md text-white font-semibold bg-[#6AA84F] hover:bg-[#4d9735] transition duration-300">
+                                    Registrar Operario
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="md:col-span-2 space-y-6">
+                            <!-- Lista de Operarios -->
+                            <div class="bg-white shadow-xl rounded-xl p-6 sm:p-8">
+                                <h3 class="text-xl font-semibold text-gray-700 mb-4">Lista de Operarios Registrados</h3>
+                                <div class="max-h-56 overflow-y-auto inventory-list-container">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Área</th>
+                                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="operarios-list-body" class="bg-white divide-y divide-gray-200">
+                                            <!-- Lista de operarios se insertará aquí -->
+                                            <tr><td colspan="4" class="text-center py-4 text-gray-500">Cargando operarios...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Préstamos del Operario Seleccionado -->
+                            <div id="operario-loan-details" class="bg-white shadow-xl rounded-xl p-6 sm:p-8 hidden">
+                                <h3 class="text-xl font-semibold text-gray-700 mb-4">Préstamos Activos para <span id="selected-operario-name" class="font-bold text-[#6AA84F]"></span></h3>
+                                <div id="operario-loans-list" class="space-y-3 max-h-48 overflow-y-auto">
+                                    <p class="text-sm text-gray-500 text-center">Seleccione un operario de la lista de arriba.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BITACORA VIEW -->
+                <div id="bitacora-view" class="app-view">
+                    <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Bitácora de Movimientos</h2>
+                    <div class="bg-white shadow-xl rounded-xl overflow-hidden">
+                        <div class="overflow-x-auto inventory-list-container max-h-[70vh]">
+                            <!-- COLOR AJUSTADO: Encabezado de tabla -->
+                            <table class="min-w-full divide-y divide-green-200 inventory-table">
+                                <thead class="bg-[#4d9735]">
+                                    <tr>
+                                        <th class="rounded-tl-xl text-left">Fecha</th>
+                                        <th class="text-left">Tipo de Movimiento</th>
+                                        <th class="text-left">Detalle</th>
+                                        <th class="text-left">Usuario</th>
+                                        <th class="rounded-tr-xl text-left">ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bitacora-list-body" class="bg-white divide-y divide-gray-200">
+                                    <!-- Datos de la bitácora se inyectarán aquí -->
+                                    <tr>
+                                        <td colspan="5" class="text-center py-8 text-gray-500">Cargando bitácora de movimientos...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- FOOTER -->
+        <footer class="p-4 bg-white border-t border-gray-200 text-center text-xs text-gray-500 mt-auto">
+            Sistema de Gestión de Activos Fijos v1.0 | Desarrollado con HTML, CSS y JavaScript.
+            <span id="app-id-display" class="block mt-1">App ID: Cargando...</span>
+        </footer>
+    </div>
+    
+    <!-- APP LOGIC SCRIPT (LÓGICA ANTERIOR SEPARADA) -->
+    <script>
+        // --- VARIABLES GLOBALES Y SIMULACIÓN DE DATOS ---
+        const API_URL = '/api'; 
+        let currentView = 'inventory-general-view';
+        let currentUserRole = 'guest';
+        let scannedItemsForAssignment = []; // Nuevo: Artículos escaneados para el préstamo
+        let currentLoanForDevolucion = null; // Nuevo: Préstamo seleccionado para devolver
+
+        // Datos simulados (sin precios)
+        let inventoryData = [
+            { id: 'H001', name: 'Martillo de uña', total: 15, available: 12, category: 'Herramientas', description: 'Martillo estándar' },
+            { id: 'H002', name: 'Taladro Inalámbrico 18V', total: 8, available: 3, category: 'Maquinaria', description: 'Incluye dos baterías' },
+            { id: 'H003', name: 'Set de Llaves Allen', total: 20, available: 20, category: 'Herramientas', description: 'Juego métrico e imperial' },
+            { id: 'H004', name: 'Escalera Plegable', total: 5, available: 0, category: 'EquipoSeguridad', description: 'Escalera de 4 peldaños' },
+            { id: 'M001', name: 'Multímetro Digital', total: 10, available: 10, category: 'Herramientas', description: 'Para mediciones eléctricas' },
+        ];
+        let operariosData = [
+            { id: 'OP001', employeeId: '1001', name: 'Juan Pérez', area: 'Producción' },
+            { id: 'OP002', employeeId: '1002', name: 'María López', area: 'Mantenimiento' },
+            { id: 'OP003', employeeId: '1003', name: 'Pedro García', area: 'Logística' },
+        ];
+        // Los préstamos ahora deben ser por unidad (simulando que cada item es escaneado)
+        let loansData = [
+            // Préstamo 1: Juan Pérez tiene 5 taladros
+            { id: 'L001-1', itemId: 'H002', itemName: 'Taladro Inalámbrico 18V', operarioName: 'Juan Pérez', operarioId: 'OP001', dateAssigned: '2024-09-27', status: 'Prestado' },
+            { id: 'L001-2', itemId: 'H002', itemName: 'Taladro Inalámbrico 18V', operarioName: 'Juan Pérez', operarioId: 'OP001', dateAssigned: '2024-09-27', status: 'Prestado' },
+            { id: 'L001-3', itemId: 'H002', itemName: 'Taladro Inalámbrico 18V', operarioName: 'Juan Pérez', operarioId: 'OP001', dateAssigned: '2024-09-27', status: 'Prestado' },
+            // Préstamo 2: María López tiene 5 escaleras
+            { id: 'L002-1', itemId: 'H004', itemName: 'Escalera Plegable', operarioName: 'María López', operarioId: 'OP002', dateAssigned: '2024-09-28', status: 'Prestado' },
+            { id: 'L002-2', itemId: 'H004', itemName: 'Escalera Plegable', operarioName: 'María López', operarioId: 'OP002', dateAssigned: '2024-09-28', status: 'Prestado' },
+        ];
+        let bitacoraData = [
+            { date: '2024-09-28 10:30', type: 'Asignación', detail: '3 unid. de Taladro a Juan Pérez (H002)', user: 'Admin', itemId: 'H002' },
+            { date: '2024-09-28 11:00', type: 'Alta', detail: 'Registro de 20 unid. de Set de Llaves Allen (H003)', user: 'Admin', itemId: 'H003' },
+            { date: '2024-09-28 15:45', type: 'Asignación', detail: '2 unid. de Escalera Plegable a María López (H004)', user: 'Almacenista', itemId: 'H004' },
+        ];
+
+        // --- MANEJO DE VISTAS Y AUTENTICACIÓN ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+
+            document.querySelectorAll('.nav-item').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    navigateTo(e.currentTarget.dataset.view);
+                });
+            });
+
+            // Lógica de inicio de sesión simulada
+            document.getElementById('login-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                if (username === 'admin' && password === 'admin') {
+                    handleLoginSuccess('admin');
+                } else if (username === 'almacenista' && password === 'almacenista') {
+                    handleLoginSuccess('almacenista');
+                } else if (username === 'operario' && password === 'operario') {
+                    handleLoginSuccess('operario');
+                } else {
+                    document.getElementById('login-message').classList.remove('hidden');
+                }
+            });
+
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            checkAuthStatus();
+            
+            // Inicializar eventos de formularios
+            initFormEvents();
+        });
+
+        function handleLoginSuccess(role) {
+            currentUserRole = role;
+            document.getElementById('login-message').classList.add('hidden');
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('main-app-view').style.display = 'flex';
+            
+            const roleDisplay = role.charAt(0).toUpperCase() + role.slice(1);
+            document.getElementById('user-info-display').textContent = `Usuario: ${roleDisplay}`;
+
+            navigateTo('inventory-general-view');
+
+            loadAllData();
+        }
+
+        function loadAllData() {
+            loadInventoryData();
+            loadOperariosData();
+            loadLoansData();
+            loadBitacoraData();
+        }
+
+        function handleLogout() {
+            currentUserRole = 'guest';
+            document.getElementById('main-app-view').style.display = 'none';
+            document.getElementById('login-view').style.display = 'flex';
+            showMessage('Sesión cerrada correctamente.', 'info');
+        }
+
+        function checkAuthStatus() {
+            document.getElementById('login-view').style.display = 'flex';
+        }
+
+        function navigateTo(viewId) {
+            document.querySelectorAll('.app-view').forEach(view => {
+                view.style.display = 'none';
+            });
+            const targetView = document.getElementById(viewId);
+            if (targetView) {
+                targetView.style.display = 'block';
+                currentView = viewId;
+            }
+
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.view === viewId) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Lógica de reseteo o recarga de vistas
+            if (viewId === 'asignacion-view') {
+                resetAssignmentForm();
+            } else if (viewId === 'devolucion-view') {
+                resetDevolucionForm();
+                loadLoansData();
+            } else if (viewId === 'operarios-view') {
+                 // Asegurarse de que la lista de operarios se recargue
+                 loadOperariosData(); 
+            }
+            lucide.createIcons();
+        }
+
+        /**
+         * Muestra un mensaje temporal (Toast).
+         */
+        function showMessage(message, type = 'info') {
+            console.log(`[Toast - ${type.toUpperCase()}]: ${message}`);
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const baseClasses = "flex items-center w-full max-w-xs p-4 rounded-lg shadow-lg text-white transform transition-all duration-300 ease-out translate-x-0";
+            let colorClasses = '';
+            
+            switch (type) {
+                case 'success': colorClasses = 'bg-green-600'; break;
+                case 'error': colorClasses = 'bg-red-600'; break;
+                case 'warning': colorClasses = 'bg-yellow-500'; break;
+                default: colorClasses = 'bg-gray-600';
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `${baseClasses} ${colorClasses} opacity-0 translate-x-full`;
+            const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-triangle' : 'info';
+            toast.innerHTML = `<i data-lucide="${iconName}" class="w-5 h-5 mr-3"></i><div class="text-sm font-semibold">${message}</div>`;
+            container.appendChild(toast);
+            lucide.createIcons(); 
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-x-full');
+            }, 50);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-x-full');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 4000);
+        }
+
+        // --- MANEJO DE DATOS Y LÓGICA DE NEGOCIO ---
+        
+        // --- INVENTARIO GENERAL (Recarga) ---
+        function loadInventoryData() {
+            const tbody = document.getElementById('inventory-list-body');
+            tbody.innerHTML = ''; 
+            inventoryData.forEach(item => {
+                const status = item.available > 0 
+                    ? (item.available === item.total ? '<span class="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full inline-flex items-center"><i data-lucide="check-circle" class="w-3 h-3 mr-1"></i>Disponible</span>' 
+                        : `<span class="px-3 py-1 text-xs font-medium text-yellow-700 bg-yellow-100 rounded-full inline-flex items-center"><i data-lucide="alert-triangle" class="w-3 h-3 mr-1"></i>Parcialmente Disp.</span>`)
+                    : '<span class="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-full inline-flex items-center"><i data-lucide="x-circle" class="w-3 h-3 mr-1"></i>Agotado</span>';
+
+                // Mostrar a quién está asignado solo si hay menos de total disponibles
+                const assigned = item.available < item.total 
+                    ? `(${item.total - item.available} prestados)` 
+                    : 'Nadie';
+                
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition duration-100';
+                row.innerHTML = `
+                    <td class="font-bold text-gray-800">${item.id}</td>
+                    <td class="text-gray-700">${item.name}</td>
+                    <td class="text-gray-700">${item.available} / ${item.total}</td>
+                    <td>${status}</td>
+                    <td class="text-gray-600">${assigned}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            lucide.createIcons();
+        }
+
+        // --- OPERARIOS (Recarga y Ver Préstamos) ---
+        function loadOperariosData() {
+            const tbody = document.getElementById('operarios-list-body');
+            tbody.innerHTML = '';
+            
+            // Rellenar select de asignación
+            const assignOperarioSelect = document.getElementById('assign-operario');
+            assignOperarioSelect.innerHTML = '<option value="">-- Seleccione un operario --</option>';
+
+            operariosData.forEach(op => {
+                // Agregar al select de asignación
+                const option = document.createElement('option');
+                option.value = op.id;
+                option.textContent = `${op.name} (${op.employeeId})`;
+                assignOperarioSelect.appendChild(option);
+
+                // Agregar a la tabla
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition duration-100 cursor-pointer';
+                row.setAttribute('onclick', `displayOperarioLoans('${op.id}', '${op.name}')`);
+
+                row.innerHTML = `
+                    <td class="px-4 py-2 font-bold text-gray-800">${op.employeeId}</td>
+                    <td class="px-4 py-2 text-gray-700">${op.name}</td>
+                    <td class="px-4 py-2 text-gray-600">${op.area}</td>
+                    <td class="px-4 py-2 flex space-x-2">
+                        <button class="text-[#4d9735] hover:text-green-700 text-xs font-medium" onclick="event.stopPropagation(); displayOperarioLoans('${op.id}', '${op.name}')">Ver Préstamos</button>
+                        <button class="text-red-500 hover:text-red-700 text-xs font-medium" onclick="event.stopPropagation(); deleteOperario('${op.id}')">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        function displayOperarioLoans(operarioId, operarioName) {
+            const loanDetailsContainer = document.getElementById('operario-loan-details');
+            const selectedOperarioName = document.getElementById('selected-operario-name');
+            const operarioLoansList = document.getElementById('operario-loans-list');
+            
+            selectedOperarioName.textContent = operarioName;
+            operarioLoansList.innerHTML = '';
+            
+            const loans = loansData.filter(loan => loan.operarioId === operarioId);
+
+            if (loans.length === 0) {
+                operarioLoansList.innerHTML = `<p class="text-sm text-gray-500 text-center py-4">${operarioName} no tiene equipos prestados actualmente.</p>`;
+            } else {
+                // Agrupar por nombre del artículo para un resumen más limpio
+                const groupedLoans = loans.reduce((acc, loan) => {
+                    acc[loan.itemId] = acc[loan.itemId] || { itemName: loan.itemName, count: 0 };
+                    acc[loan.itemId].count++;
+                    return acc;
+                }, {});
+
+                Object.values(groupedLoans).forEach(group => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'flex items-center justify-between p-3 border-b border-gray-100';
+                    itemDiv.innerHTML = `
+                        <p class="text-sm text-gray-700 font-medium">${group.itemName}</p>
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">${group.count} unidades</span>
+                    `;
+                    operarioLoansList.appendChild(itemDiv);
+                });
+            }
+
+            loanDetailsContainer.classList.remove('hidden');
+        }
+
+        // --- PRÉSTAMOS (Recarga) ---
+        let currentGroupedLoans = [];
+        function loadLoansData() {
+            const container = document.getElementById('active-loans-list');
+            container.innerHTML = '';
+            
+            // Agrupar préstamos por Operario y Fecha
+            const groupedLoans = loansData.reduce((acc, loan) => {
+                const key = `${loan.operarioId}-${loan.dateAssigned}`;
+                acc[key] = acc[key] || {
+                    operarioId: loan.operarioId,
+                    operarioName: loan.operarioName,
+                    dateAssigned: loan.dateAssigned,
+                    items: [],
+                    totalItems: 0
+                };
+                acc[key].items.push(loan);
+                acc[key].totalItems++;
+                return acc;
+            }, {});
+
+            currentGroupedLoans = Object.values(groupedLoans);
+
+            if (currentGroupedLoans.length === 0) {
+                container.innerHTML = '<div class="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">No hay préstamos activos.</div>';
+                return;
+            }
+
+            currentGroupedLoans.forEach((group, index) => {
+                const card = document.createElement('div');
+                card.className = 'group flex flex-col p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md hover:border-[#6AA84F] transition duration-150 cursor-pointer';
+                card.setAttribute('onclick', `selectLoanForDevolucion(${index})`);
+                
+                // Generar resumen de artículos
+                const itemSummary = group.items.reduce((acc, item) => {
+                    acc[item.itemName] = (acc[item.itemName] || 0) + 1;
+                    return acc;
+                }, {});
+                
+                const summaryHtml = Object.entries(itemSummary).map(([name, count]) => 
+                    `<span class="text-xs text-gray-500">${count}x ${name}</span>`
+                ).join(' | ');
+
+                card.innerHTML = `
+                    <div>
+                        <p class="text-lg font-semibold text-gray-800 flex items-center">
+                            <i data-lucide="user-check" class="w-5 h-5 mr-2 text-[#4d9735]"></i>
+                            ${group.operarioName}
+                        </p>
+                        <p class="text-sm text-gray-600 mt-1">${group.totalItems} artículos en total.</p>
+                        <div class="mt-2 p-2 bg-gray-50 rounded-md border border-gray-100">${summaryHtml}</div>
+                        <p class="text-xs text-gray-400 mt-2">Fecha de Asignación: ${group.dateAssigned}</p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function resetDevolucionForm() {
+            currentLoanForDevolucion = null;
+            document.getElementById('devolucion-scan-area').classList.add('hidden');
+            document.getElementById('devolucion-items-summary').innerHTML = '<p class="text-sm text-gray-500 text-center" id="empty-devolucion-message">Escanee un artículo del préstamo seleccionado.</p>';
+            document.getElementById('devolucion-scanned-count').textContent = '0';
+            document.getElementById('devolucion-total-count').textContent = '0';
+            document.getElementById('product-status-area').classList.add('hidden');
+            document.getElementById('confirm-devolucion-btn').disabled = true;
+            document.getElementById('devolucion-status').value = '';
+            document.getElementById('devolucion-scan-error').classList.add('hidden');
+        }
+
+        function selectLoanForDevolucion(index) {
+            resetDevolucionForm();
+            currentLoanForDevolucion = currentGroupedLoans[index];
+            
+            document.getElementById('devolucion-operario-name').textContent = currentLoanForDevolucion.operarioName;
+            document.getElementById('devolucion-total-count').textContent = currentLoanForDevolucion.totalItems;
+            document.getElementById('devolucion-scan-area').classList.remove('hidden');
+            document.getElementById('product-status-area').classList.remove('hidden');
+            document.getElementById('devolucion-barcode-input').focus();
+            
+            showMessage(`Préstamo de ${currentLoanForDevolucion.operarioName} seleccionado. Total de ${currentLoanForDevolucion.totalItems} artículos a devolver.`, 'info');
+            
+            // Opcional: Resaltar la tarjeta seleccionada
+            document.querySelectorAll('#active-loans-list > div').forEach((card, i) => {
+                card.classList.toggle('border-2', i === index);
+                card.classList.toggle('border-[#6AA84F]', i === index);
+            });
+        }
+        
+        // --- LÓGICA DE EVENTOS (FORMULARIOS Y BARCODE) ---
+
+        function initFormEvents() {
+            // ALTAS: Simulación
+            document.getElementById('add-item-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                showMessage('Alta de equipo simulada exitosamente.', 'success');
+                // Aquí se agregaría el nuevo item a inventoryData y se recargaría loadInventoryData()
+            });
+
+            // EDICION: Simulación de Búsqueda
+             document.getElementById('edit-search').addEventListener('input', (e) => {
+                // Lógica de simulación de búsqueda de edición (existente)
+            });
+
+
+            // ASIGNACIÓN: Escaneo de Artículos
+            document.getElementById('scan-assign-btn').addEventListener('click', (e) => {
+                e.preventDefault(); // Prevenir submit del botón si estuviera dentro del form
+                scanItemForAssignment();
+            });
+            
+            document.getElementById('assign-barcode-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    scanItemForAssignment();
+                }
+            });
+
+            // ASIGNACIÓN: Confirmar Formulario
+            document.getElementById('assign-item-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (scannedItemsForAssignment.length === 0 || document.getElementById('assign-operario').value === '') {
+                    showMessage('Debe seleccionar un operario y escanear al menos un artículo.', 'error');
+                    return;
+                }
+                processAssignment();
+            });
+
+            // DEVOLUCIÓN: Escaneo de Artículos
+            document.getElementById('scan-devolucion-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                scanItemForDevolucion();
+            });
+            
+            document.getElementById('devolucion-barcode-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    scanItemForDevolucion();
+                }
+            });
+
+            // DEVOLUCIÓN: Confirmar Formulario
+            document.getElementById('devolucion-item-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (!currentLoanForDevolucion) {
+                    showMessage('Primero debe seleccionar un préstamo activo.', 'error');
+                    return;
+                }
+                if (document.getElementById('devolucion-scanned-count').textContent === '0') {
+                    showMessage('Debe escanear al menos un artículo a devolver.', 'error');
+                    return;
+                }
+                if (document.getElementById('devolucion-status').value === '') {
+                    showMessage('El estado del producto es obligatorio para la devolución.', 'error');
+                    return;
+                }
+
+                processDevolucion();
+            });
+        }
+
+        // --- LÓGICA DE ASIGNACIÓN (MÚLTIPLES ARTÍCULOS) ---
+
+        function scanItemForAssignment() {
+            const barcodeInput = document.getElementById('assign-barcode-input');
+            const itemId = barcodeInput.value.trim().toUpperCase();
+            barcodeInput.value = ''; // Limpiar input para el siguiente escaneo
+
+            if (!itemId) return showMessage('Ingrese un ID de producto válido.', 'warning');
+
+            const item = inventoryData.find(i => i.id === itemId);
+
+            if (!item) {
+                return showMessage(`Producto ID ${itemId} no encontrado.`, 'error');
+            }
+
+            if (item.available <= 0) {
+                return showMessage(`${item.name} agotado. No se puede prestar.`, 'warning');
+            }
+
+            // SIMULACIÓN: Reducir disponibilidad al instante para evitar doble escaneo.
+            item.available--; 
+            scannedItemsForAssignment.push(item);
+            updateAssignmentSummary();
+            loadInventoryData();
+            showMessage(`${item.name} (ID: ${itemId}) añadido al préstamo.`, 'success');
+        }
+
+        function updateAssignmentSummary() {
+            const summaryContainer = document.getElementById('scanned-items-summary');
+            const scannedCount = document.getElementById('scanned-count');
+            const confirmBtn = document.getElementById('confirm-assign-btn');
+            const operarioSelect = document.getElementById('assign-operario').value;
+            
+            scannedCount.textContent = scannedItemsForAssignment.length;
+            summaryContainer.innerHTML = '';
+
+            if (scannedItemsForAssignment.length === 0) {
+                document.getElementById('empty-scan-message').classList.remove('hidden');
+                confirmBtn.disabled = true;
+                return;
+            } else {
+                document.getElementById('empty-scan-message').classList.add('hidden');
+                confirmBtn.disabled = (operarioSelect === ''); // Habilitar si hay artículos
+            }
+
+            // Agrupar por nombre/ID para la visualización
+            const grouped = scannedItemsForAssignment.reduce((acc, item) => {
+                acc[item.id] = acc[item.id] || { ...item, count: 0 };
+                acc[item.id].count++;
+                return acc;
+            }, {});
+
+            Object.values(grouped).forEach(group => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex items-center justify-between p-2 bg-white border border-gray-200 rounded-md';
+                itemDiv.innerHTML = `
+                    <p class="text-sm text-gray-700 font-medium">${group.name} (${group.id})</p>
+                    <span class="text-base font-bold text-[#4d9735]">${group.count}x</span>
+                `;
+                summaryContainer.appendChild(itemDiv);
+            });
+        }
+        
+        function processAssignment() {
+            const operarioId = document.getElementById('assign-operario').value;
+            const operario = operariosData.find(op => op.id === operarioId);
+
+            const now = new Date().toISOString().slice(0, 10);
+            
+            scannedItemsForAssignment.forEach((item, index) => {
+                // Simulación: Crear un nuevo registro de préstamo (uno por cada artículo escaneado)
+                const newLoan = {
+                    id: `L${Date.now()}-${index}`, // ID único de préstamo
+                    itemId: item.id,
+                    itemName: item.name,
+                    operarioName: operario.name,
+                    operarioId: operario.id,
+                    dateAssigned: now,
+                    status: 'Prestado'
+                };
+                loansData.push(newLoan);
+                
+                // Simulación: Bitácora
+                bitacoraData.push({ 
+                    date: new Date().toLocaleString(), 
+                    type: 'Asignación', 
+                    detail: `1 unid. de ${item.name} a ${operario.name} (${item.id})`, 
+                    user: currentUserRole, 
+                    itemId: item.id 
+                });
+            });
+
+            showMessage(`Se registraron ${scannedItemsForAssignment.length} artículos a ${operario.name}.`, 'success');
+            resetAssignmentForm();
+            loadAllData();
+        }
+        
+        function resetAssignmentForm() {
+            document.getElementById('assign-item-form').reset();
+            scannedItemsForAssignment = [];
+            updateAssignmentSummary();
+            document.getElementById('assign-barcode-input').focus();
+        }
+
+
+        // --- LÓGICA DE DEVOLUCIÓN (MÚLTIPLES ARTÍCULOS CON ESTADO) ---
+
+        let scannedItemsForDevolucion = []; // Artículos (registros de loansData) a devolver
+        
+        function scanItemForDevolucion() {
+            if (!currentLoanForDevolucion) return showMessage('Debe seleccionar un préstamo primero.', 'error');
+            
+            const barcodeInput = document.getElementById('devolucion-barcode-input');
+            const itemId = barcodeInput.value.trim().toUpperCase();
+            barcodeInput.value = ''; // Limpiar input
+
+            if (!itemId) return showMessage('Ingrese un ID de producto válido.', 'warning');
+
+            // 1. Verificar si el item pertenece al préstamo y aún no ha sido escaneado
+            const availableLoans = currentLoanForDevolucion.items.filter(loan => 
+                loan.itemId === itemId && 
+                !scannedItemsForDevolucion.includes(loan) // Se asume que cada item.id en loansData es único por unidad
+            );
+            
+            if (availableLoans.length === 0) {
+                 document.getElementById('devolucion-scan-error').classList.remove('hidden');
+                 return showMessage(`Artículo ID ${itemId} no encontrado o ya fue registrado para devolución.`, 'warning');
+            }
+            
+            document.getElementById('devolucion-scan-error').classList.add('hidden');
+            
+            // Tomar la primera unidad disponible (simulando que el código de barras es único por unidad)
+            const itemToReturn = availableLoans[0]; 
+            scannedItemsForDevolucion.push(itemToReturn);
+            
+            updateDevolucionSummary();
+            showMessage(`1x ${itemToReturn.itemName} añadido para devolución.`, 'success');
+        }
+
+        function updateDevolucionSummary() {
+            const summaryContainer = document.getElementById('devolucion-items-summary');
+            const scannedCountDisplay = document.getElementById('devolucion-scanned-count');
+            const totalCountDisplay = document.getElementById('devolucion-total-count');
+            const confirmBtn = document.getElementById('confirm-devolucion-btn');
+            
+            const totalItems = currentLoanForDevolucion ? currentLoanForDevolucion.totalItems : 0;
+            const scannedCount = scannedItemsForDevolucion.length;
+            
+            scannedCountDisplay.textContent = scannedCount;
+            totalCountDisplay.textContent = totalItems;
+            summaryContainer.innerHTML = '';
+
+            if (scannedCount === 0) {
+                document.getElementById('empty-devolucion-message').classList.remove('hidden');
+                confirmBtn.disabled = true;
+                return;
+            } else {
+                document.getElementById('empty-devolucion-message').classList.add('hidden');
+                // Habilitar botón si hay artículos escaneados Y se seleccionó un estado
+                confirmBtn.disabled = (document.getElementById('devolucion-status').value === '');
+            }
+
+            // Agrupar por nombre/ID para la visualización
+            const grouped = scannedItemsForDevolucion.reduce((acc, item) => {
+                acc[item.itemId] = acc[item.itemId] || { itemName: item.itemName, count: 0 };
+                acc[item.itemId].count++;
+                return acc;
+            }, {});
+
+            Object.values(grouped).forEach(group => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex items-center justify-between p-2 bg-white border border-gray-200 rounded-md';
+                itemDiv.innerHTML = `
+                    <p class="text-sm text-gray-700 font-medium">${group.itemName} (ID: ${group.itemId})</p>
+                    <span class="text-base font-bold text-[#4d9735]">${group.count}x</span>
+                `;
+                summaryContainer.appendChild(itemDiv);
+            });
+        }
+        
+        // Listener para habilitar/deshabilitar botón de confirmación de devolución
+        document.getElementById('devolucion-status').addEventListener('change', () => {
+            const confirmBtn = document.getElementById('confirm-devolucion-btn');
+            if (scannedItemsForDevolucion.length > 0 && document.getElementById('devolucion-status').value !== '') {
+                confirmBtn.disabled = false;
+            } else {
+                confirmBtn.disabled = true;
+            }
+        });
+
+        function processDevolucion() {
+            const status = document.getElementById('devolucion-status').value;
+            const operarioName = currentLoanForDevolucion.operarioName;
+            
+            scannedItemsForDevolucion.forEach(loanItem => {
+                // 1. Aumentar disponibilidad en el inventario
+                const inventoryItem = inventoryData.find(i => i.id === loanItem.itemId);
+                if (inventoryItem) {
+                    inventoryItem.available++;
+                }
+
+                // 2. Eliminar el registro de préstamo de loansData
+                loansData = loansData.filter(loan => loan.id !== loanItem.id);
+                
+                // 3. Bitácora
+                bitacoraData.push({ 
+                    date: new Date().toLocaleString(), 
+                    type: 'Devolución', 
+                    detail: `1 unid. de ${loanItem.itemName} de ${operarioName}. Estado: ${status}`, 
+                    user: currentUserRole, 
+                    itemId: loanItem.itemId 
+                });
+
+                // Simulación: Si el estado es Irreparable, reducir la capacidad total
+                if (status === 'Irreparable') {
+                    if (inventoryItem) {
+                        inventoryItem.total--;
+                        showMessage(`${inventoryItem.name} dado de baja por irreparable. Capacidad total reducida.`, 'warning');
+                    }
+                }
+            });
+
+            showMessage(`Se registraron ${scannedItemsForDevolucion.length} artículos devueltos por ${operarioName} con estado: ${status}.`, 'success');
+            
+            // Resetear y recargar
+            scannedItemsForDevolucion = [];
+            currentLoanForDevolucion = null;
+            loadAllData();
+            resetDevolucionForm(); // Oculta el área de escaneo y limpia
+            
+            // Recargar para refrescar las tarjetas de préstamo
+            loadLoansData();
+        }
+
+
+    </script>
+</body>
+</html>

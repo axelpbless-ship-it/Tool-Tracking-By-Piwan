@@ -964,7 +964,7 @@
                 return;
             } else {
                 document.getElementById('empty-scan-message').classList.add('hidden');
-                confirmBtn.disabled = (operarioSelect === ''); // Habilitar si hay artículos
+                validateAssignButton();  // Habilitar si hay artículos
             }
 
             // Agrupar por nombre/ID para la visualización
@@ -1102,15 +1102,15 @@
             });
         }
         
-        // Listener para habilitar/deshabilitar botón de confirmación de devolución
-        document.getElementById('devolucion-status').addEventListener('change', () => {
-            const confirmBtn = document.getElementById('confirm-devolucion-btn');
-            if (scannedItemsForDevolucion.length > 0 && document.getElementById('devolucion-status').value !== '') {
-                confirmBtn.disabled = false;
-            } else {
-                confirmBtn.disabled = true;
-            }
-        });
+// --- Listener para habilitar/deshabilitar botón de devolución ---
+function validateDevolucionButton() {
+    const confirmBtn = document.getElementById('confirm-devolucion-btn');
+    const status = document.getElementById('devolucion-status').value;
+    confirmBtn.disabled = !(scannedItemsForDevolucion.length > 0 && status !== '');
+}
+
+// Escuchar cambios en el select de estado
+document.getElementById('devolucion-status').addEventListener('change', validateDevolucionButton);
 
         function processDevolucion() {
             const status = document.getElementById('devolucion-status').value;
@@ -1160,5 +1160,6 @@
     </script>
 </body>
 </html>
+
 
 
